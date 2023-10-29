@@ -1,13 +1,27 @@
 import React, {  useState } from 'react'
+import axios from "axios";
+import * as Yup from 'yup';
 
 // 👇 Here are the validation errors you will use with Yup.
 const validationErrors = {
-  fullNameTooShort: 'full name must be at least 3 characters',
-  fullNameTooLong: 'full name must be at most 20 characters',
-  sizeIncorrect: 'size must be S or M or L'
+  fullNameTooShort: 'Full name must be at least 3 characters',
+  fullNameTooLong: 'Full name must be at most 20 characters',
+  sizeIncorrect: 'Size must be S or M or L'
 }
 
 // 👇 Here you will create your schema.
+const formSchema = Yup.object().shape({
+  fullName: Yup.string()
+  .min(3, validationErrors.fullNameTooShort)
+  .max(20, validationErrors.fullNameTooLong)
+  .required('Full name is required'),
+  size: Yup.string()
+    .oneOf(['S', 'M', 'L'], validationErrors.sizeIncorrect)
+    .required('Size is required'),
+  toppings: Yup.array()
+    .of(Yup.string())
+    
+});
 
 // 👇 This array could help you construct your checkboxes using .map in the JSX.
 const toppings = [
@@ -24,67 +38,93 @@ export default function Form() {
     const [selectedToppings, setSelectedToppings] = useState([]);
     const [success, setSuccess] = useState(false);
     const [failure, setFailure] = useState(false);
-    
-  
-    const validateFullName = (name) => {
-      if (typeof name !== 'string') {
-        return validationErrors.fullNameTooShort;
-      }
-      if (name.length < 3) {
-        return validationErrors.fullNameTooShort;
-      }
-      if (name.length > 20) {
-        return validationErrors.fullNameTooLong;
-      }
-      return '';
-    };
-  
-    const validateSize = () => {
-     if (size !== 'S' && size !== 'M' && size !== 'L') {
-        return validationErrors.sizeIncorrect;
-      }
-      return '';
-    };
-    const handleToppingChange = (toppingId) => {
-      if (selectedToppings.includes(toppingId)) {
-        setSelectedToppings(selectedToppings.filter((t) => t !== toppingId));
+    const [post, setPost] = useState(null); 
+    const handleToppingChange = (topping_id) => {
+      if (selectedToppings.includes(topping_id)) {
+        setSelectedToppings(selectedToppings.filter((topping) => topping !== topping_id));
       } else {
-        setSelectedToppings([...selectedToppings, toppingId]);
+        setSelectedToppings([...selectedToppings, topping_id]);
       }
     };
   
+    const validateFullName = (value) => {
+      try {
+        Yup.string()
+          .min(3, validationErrors.fullNameTooShort)
+          .max(20, validationErrors.fullNameTooLong)
+          .validateSync(value, { abortEarly: false }); 
+        return null;
+      } catch (error) {
+        return error.inner[0].message; 
+      }
+    };
+    
+    const validateSize = (value) => {
+      try {
+        Yup.string()
+          .oneOf(['S', 'M', 'L'], validationErrors.sizeIncorrect)
+          .validateSync(value, { abortEarly: false }); 
+        return null;
+      } catch (error) {
+        return error.inner[0].message;
+      }
+    };
+    
+    
+
     const handleSubmit = (e) => {
       e.preventDefault();
-      const fullNameError = validateFullName(fullName);
-      const sizeError = validateSize(size);
   
-      if (!fullNameError && !sizeError) {
-        setFailure(false);
-        setSuccess(true);
-        setFullName('');
-        setSize('');
-        setSelectedToppings([]);
-      } else {
-        setFailure(true);
-        setSuccess(false);
-      }
+      formSchema
+        .validate(
+          {
+            fullName,
+            size,
+            toppings: selectedToppings,
+          },
+          { abortEarly: false } 
+        )
+        .then(() => {
+          setFailure(false);
+  
+          const order = {
+            fullName: fullName,
+            size: size,
+            toppings: selectedToppings,
+          };
+  
+          axios
+            .post("https://reqres.in/api/users", order)
+            .then((response) => {
+              setSuccess(true);
+              console.log("Order submitted successfully:", response.data);
+              setPost(response.data);
+              setFullName('');
+              setSize('');
+              setSelectedToppings([]);
+            })
+            .catch((error) => {
+              setSuccess(false);
+              console.error("Error submitting order:", error);
+            });
+        })
+        .catch((errors) => {
+          setFailure(true);
+          setSuccess(false);
+          console.error("Validation errors:", errors);
+        });
     };
- const getToppingsNumber = () => {
-    if (selectedToppings.length > 0) {
-      return `with ${selectedToppings.length} topping${selectedToppings.length > 1 ? 's' : ''}`;
-    } else {
-      return 'with no toppings';
-    }
-  };
 
   return (
     <form onSubmit={handleSubmit}>
       <h2>Order Your Pizza</h2>
      {success && (
   <div className="success">
-    Thank you for your order, {document.getElementById('fullName').value}! Your {size === 'S' ? 'small' : size === 'M' ? 'medium' : 'large'} pizza {getToppingsNumber(toppings)} is on the way.
-  </div>
-)}
+    Thank you for your order, {fullName}! Your{' '}
+          {size === 'S' ? 'small' : size === 'M' ? 'medium' : 'large'} pizza{' '}
+          {selectedToppings.length} topping(s) is on the way.
+        </div>
+      )}
       <div className="input-group">
         <div>
           <label htmlFor="fullName">Full Name</label><br />
@@ -109,7 +149,7 @@ export default function Form() {
   <option value="L">Large</option>
 </select>
        
-          {size && validateSize() && <div className='error'>{validateSize()}</div>}
+          {size && validateSize(size) && <div className='error'>{validateSize(size)}</div>}
       
         </div>
       </div>
@@ -125,13 +165,20 @@ export default function Form() {
               onChange={() => handleToppingChange(topping.topping_id)}
             />
             {topping.text}<br />
-  </label>
-))}
-
+          </label>
+        ))}
+        {selectedToppings.length === 0 && (
+          <div className="error">Select at least one topping</div>
+        )}
+        {selectedToppings.length > 0 && (
+          <div className="info">Selected {selectedToppings.length} topping(s)</div>
+        )}
       </div>
+
+
       {/* 👇 Make sure the submit stays disabled until the form validates! */}
       <input   type="submit"
-        disabled={!fullName || !size || validateFullName(fullName) || validateSize()} 
+        disabled={!fullName || !size || selectedToppings.length === 0} 
       />
     </form>
   )
