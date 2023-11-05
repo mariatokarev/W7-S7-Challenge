@@ -38,7 +38,9 @@ export default function Form() {
     const [selectedToppings, setSelectedToppings] = useState([]);
     const [success, setSuccess] = useState(false);
     const [failure, setFailure] = useState(false);
-    const [post, setPost] = useState(null); 
+    const [post, setPost] = useState(null);
+    const [validationErrors, setValidationErrors] = useState({});
+
     const handleToppingChange = (topping_id) => {
       if (selectedToppings.includes(topping_id)) {
         setSelectedToppings(selectedToppings.filter((topping) => topping !== topping_id));
@@ -46,74 +48,53 @@ export default function Form() {
         setSelectedToppings([...selectedToppings, topping_id]);
       }
     };
+    const validateField = async (field, value) => {
+        try {
+          const updatedData = { ...formData, [field]: value };
+          await formSchema.validateAt(field, updatedData);
+          setValidationErrors({ ...validationErrors, [field]: null });
+        } catch (error) {
+          setValidationErrors({ ...validationErrors, [field]: error.message });
+        }
+      };
+      console.log(validationErrors)
   
-    const validateFullName = (value) => {
-      try {
-        Yup.string()
-          .min(3, validationErrors.fullNameTooShort)
-          .max(20, validationErrors.fullNameTooLong)
-          .validateSync(value, { abortEarly: false }); 
-        return null;
-      } catch (error) {
-        return error.inner[0].message; 
-      }
-    };
+      const handleSubmit = (e) => {
+        e.preventDefault();
     
-    const validateSize = (value) => {
-      try {
-        Yup.string()
-          .oneOf(['S', 'M', 'L'], validationErrors.sizeIncorrect)
-          .validateSync(value, { abortEarly: false }); 
-        return null;
-      } catch (error) {
-        return error.inner[0].message;
-      }
-    };
+        formSchema
+          .validate(formData, { abortEarly: false })
+          .then(() => {
+            setFailure(false);
     
+            const order = {
+              fullName: fullName,
+              size: size,
+              toppings: selectedToppings,
+            };
     
-
-    const handleSubmit = (e) => {
-      e.preventDefault();
-  
-      formSchema
-        .validate(
-          {
-            fullName,
-            size,
-            toppings: selectedToppings,
-          },
-          { abortEarly: false } 
-        )
-        .then(() => {
-          setFailure(false);
-  
-          const order = {
-            fullName: fullName,
-            size: size,
-            toppings: selectedToppings,
-          };
-  
-          axios
-            .post("https://reqres.in/api/users", order)
-            .then((response) => {
-              setSuccess(true);
-              console.log("Order submitted successfully:", response.data);
-              setPost(response.data);
-              setFullName('');
-              setSize('');
-              setSelectedToppings([]);
-            })
-            .catch((error) => {
-              setSuccess(false);
-              console.error("Error submitting order:", error);
-            });
-        })
-        .catch((errors) => {
-          setFailure(true);
-          setSuccess(false);
-          console.error("Validation errors:", errors);
-        });
-    };
+            axios
+              .post("https://reqres.in/api/users", order)
+              .then((response) => {
+                setSuccess(true);
+                console.log("Order submitted successfully:", response.data);
+                setPost(response.data);
+                setFullName('');
+                setSize('');
+                setSelectedToppings([]);
+              })
+              .catch((error) => {
+                setSuccess(false);
+                console.error("Error submitting order:", error);
+              });
+          })
+          .catch((errors) => {
+            setFailure(true);
+            setSuccess(false);
+            console.error("Validation errors:", errors);
+          });
+      };
+    
 
   return (
     <form onSubmit={handleSubmit}>
@@ -132,9 +113,7 @@ export default function Form() {
             onChange={(e) => setFullName(e.target.value)}
           />
         
-        {fullName && validateFullName(fullName) && (
-  <div className='error'>{validateFullName(fullName)}</div>
-)}
+      
   
       </div>
       </div>
@@ -149,7 +128,7 @@ export default function Form() {
   <option value="L">Large</option>
 </select>
        
-          {size && validateSize(size) && <div className='error'>{validateSize(size)}</div>}
+         
       
         </div>
       </div>
