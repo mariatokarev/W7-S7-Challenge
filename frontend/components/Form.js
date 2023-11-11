@@ -33,132 +33,117 @@ const toppings = [
 ]
 
 export default function Form() {
-    const [fullName, setFullName] = useState('');
-    const [size, setSize] = useState('');
-    const [selectedToppings, setSelectedToppings] = useState([]);
-    const [success, setSuccess] = useState(false);
-    const [failure, setFailure] = useState(false);
-    const [post, setPost] = useState(null);
-    const [validationErrors, setValidationErrors] = useState({});
+  const [form, setForm] = useState({ fullName: '', size: '', toppings: [] });
+  const [disabled, setDisabled] = useState(true);
+  const [errors, setErrors] = useState({ fullName: '', size: '', toppings: '' });
+  const [message, setMessage] = useState('');
 
-    const handleToppingChange = (topping_id) => {
-      if (selectedToppings.includes(topping_id)) {
-        setSelectedToppings(selectedToppings.filter((topping) => topping !== topping_id));
-      } else {
-        setSelectedToppings([...selectedToppings, topping_id]);
-      }
-    };
-    const validateField = async (field, value) => {
-        try {
-          const updatedData = { ...formData, [field]: value };
-          await formSchema.validateAt(field, updatedData);
-          setValidationErrors({ ...validationErrors, [field]: null });
-        } catch (error) {
-          setValidationErrors({ ...validationErrors, [field]: error.message });
-        }
-      };
-      console.log(validationErrors)
-  
-      const handleSubmit = (e) => {
-        e.preventDefault();
-    
-        formSchema
-          .validate(formData, { abortEarly: false })
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    const newValue = type === 'checkbox' ? checked : value;
+
+    Yup.reach(formSchema, name)
+      .validate(value)
+      .then(() => {
+        setErrors({ ...errors, [name]: '' });
+        const formValues = { ...form, [name]: newValue };
+        formSchema.isValid(formValues).then((valid) => {
+          setDisabled(!valid);
+        });
+      })
+      .catch((err) => {
+        setErrors({ ...errors, [name]: err.errors[0] });
+        setDisabled(true);
+      });
+
+    setForm({ ...form, [name]: newValue });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    formSchema.isValid(form).then((valid) => {
+      if (valid) {
+        axios
+          .post('https://reqres.in/api/users', form)
           .then(() => {
-            setFailure(false);
-    
-            const order = {
-              fullName: fullName,
-              size: size,
-              toppings: selectedToppings,
-            };
-    
-            axios
-              .post("https://reqres.in/api/users", order)
-              .then((response) => {
-                setSuccess(true);
-                console.log("Order submitted successfully:", response.data);
-                setPost(response.data);
-                setFullName('');
-                setSize('');
-                setSelectedToppings([]);
-              })
-              .catch((error) => {
-                setSuccess(false);
-                console.error("Error submitting order:", error);
-              });
+            const { fullName, size, toppings } = form;
+            const orderMessage = `Thank you for your order, ${fullName}! Your ${size} pizza with ${
+              form.toppings.length > 0 ? form.toppings.map(t => t.text).join(', ') : 'no toppings'
+            } is on the way.`;
+            setMessage(orderMessage);
+            setForm({ fullName: '', size: '', toppings: [] });
+            setErrors({ fullName: '', size: '', toppings: '' });
+            setDisabled(true);
           })
-          .catch((errors) => {
-            setFailure(true);
-            setSuccess(false);
-            console.error("Validation errors:", errors);
+          .catch((error) => {
+            console.error('Error submitting order:', error);
           });
-      };
-    
+      } else {
+        console.error('Form has validation errors');
+      }
+    });
+  };
+
+
 
   return (
     <form onSubmit={handleSubmit}>
       <h2>Order Your Pizza</h2>
-     {success && (
-  <div className="success">
-    Thank you for your order, {fullName}! Your{' '}
-          {size === 'S' ? 'small' : size === 'M' ? 'medium' : 'large'} pizza{' '}
-          {selectedToppings.length} topping(s) is on the way.
-        </div>
-      )}
+      {message && <div className="success">{message}</div>}
+      
       <div className="input-group">
         <div>
           <label htmlFor="fullName">Full Name</label><br />
-          <input placeholder="Type full name" id="fullName" type="text" value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+          <input
+           type="text"
+           id="fullName"
+           name="fullName"
+           value=''
+           onChange={handleChange}
+           placeholder="Type full name"
           />
-        
-      
-  
-      </div>
+          
+          {validationErrors.fullName && <div className="error-message">{validationError.fullName}</div>}
+        </div>
       </div>
 
       <div className="input-group">
         <div>
           <label htmlFor="size">Size</label><br />
-          <select id="size" value={size} onChange={(e) => setSize(e.target.value)}>
-  <option value="">----Choose Size----</option>
-  <option value="S">Small</option>
-  <option value="M">Medium</option>
-  <option value="L">Large</option>
-</select>
-       
-         
-      
+          <select
+            id="size"
+            name="size"
+            value={form.size}
+            onChange={handleChange}
+          >
+            <option value="">----Choose Size----</option>
+            <option value="S">Small</option>
+            <option value="M">Medium</option>
+            <option value="L">Large</option>
+          </select>
+          {errors.size && <div className="error-message">{errors.size}</div>}
         </div>
       </div>
 
       <div className="input-group">
-        {/* 👇 Maybe you could generate the checkboxes dynamically */}
+      
         {toppings.map((topping) => (
           <label key={topping.topping_id} htmlFor={topping.topping_id}>
             <input
-              name={topping.topping_id}
               type="checkbox"
-              checked={selectedToppings.includes(topping.topping_id)}
-              onChange={() => handleToppingChange(topping.topping_id)}
+              name="toppings"
+              value={topping.topping_id}
+              checked={form.toppings[topping.topping_id] === true}
+              onChange={handleChange}
             />
             {topping.text}<br />
           </label>
         ))}
-        {selectedToppings.length === 0 && (
-          <div className="error">Select at least one topping</div>
-        )}
-        {selectedToppings.length > 0 && (
-          <div className="info">Selected {selectedToppings.length} topping(s)</div>
-        )}
+           
       </div>
 
-
-      {/* 👇 Make sure the submit stays disabled until the form validates! */}
-      <input   type="submit"
-        disabled={!fullName || !size || selectedToppings.length === 0} 
-      />
+      <input disabled type="submit" />
     </form>
   )
 }
