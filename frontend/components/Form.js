@@ -37,25 +37,65 @@ export default function Form() {
   const [errors, setErrors] = useState({ fullName: '', size: '', toppings: '' });
   const [message, setMessage] = useState('');
 
-  const handleChange = (e) => {
+  const handleFullNameChange = (e) => {
+    const { value } = e.target;
+
+    Yup.reach(formSchema, 'fullName')
+      .validate(value)
+      .then(() => {
+        setErrors({ ...errors, fullName: '' });
+        const formValues = { ...form, fullName: value };
+        formSchema.isValid(formValues).then((valid) => {
+          setDisabled(!valid);
+        });
+      })
+      .catch((err) => {
+        setErrors({ ...errors, fullName: err.errors[0] });
+        setDisabled(true);
+      });
+
+    setForm({ ...form, fullName: value });
+  };
+
+  const handleSizeChange = (e) => {
+    const { value } = e.target;
+
+    Yup.reach(formSchema, 'size')
+      .validate(value)
+      .then(() => {
+        setErrors({ ...errors, size: '' });
+        const formValues = { ...form, size: value };
+        formSchema.isValid(formValues).then((valid) => {
+          setDisabled(!valid);
+        });
+      })
+      .catch((err) => {
+        setErrors({ ...errors, size: err.errors[0] });
+        setDisabled(true);
+      });
+
+    setForm({ ...form, size: value });
+  };
+
+  const handleToppingsChange = (e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
 
     Yup.reach(formSchema, name)
       .validate(value)
       .then(() => {
-        setErrors({ ...errors, [name]: '' });
-        const formValues = { ...form, [name]: newValue };
+        setErrors({ ...errors, toppings: '' });
+        const formValues = { ...form, toppings: { ...form.toppings, [value]: checked } };
         formSchema.isValid(formValues).then((valid) => {
           setDisabled(!valid);
         });
       })
       .catch((err) => {
-        setErrors({ ...errors, [name]: err.errors[0] });
+        setErrors({ ...errors, toppings: err.errors[0] });
         setDisabled(true);
       });
 
-    setForm({ ...form, [name]: newValue });
+    setForm({ ...form, toppings: { ...form.toppings, [value]: checked } });
   };
 
   const handleSubmit = (e) => {
@@ -67,22 +107,28 @@ export default function Form() {
           .post('https://reqres.in/api/users', form)
           .then(() => {
             const { fullName, size, toppings } = form;
-            const orderMessage = `Thank you for your order, ${fullName}! Your ${size} pizza with ${
-              form.toppings.length > 0 ? form.toppings.map(t => t.text).join(', ') : 'no toppings'
-            } is on the way.`;
-            setMessage(orderMessage);
-            setForm({ fullName: '', size: '', toppings: [] });
-            setErrors({ fullName: '', size: '', toppings: '' });
-            setDisabled(true);
-          })
-          .catch((error) => {
-            console.error('Error submitting order:', error);
-          });
-      } else {
-        console.error('Form has validation errors');
-      }
-    });
-  };
+
+          let orderMessage = `Thank you for your order, ${fullName}! Your ${size} pizza`;
+
+          if (toppings.length > 0) {
+            orderMessage += ` with ${toppings.map(t => t.text).join(', ')} is on the way.`;
+          } else {
+            orderMessage += ' with no toppings is on the way.';
+          }
+
+          setMessage(orderMessage);
+          setForm({ fullName: '', size: '', toppings: [] });
+          setErrors({ fullName: '', size: '', toppings: '' });
+          setDisabled(true);
+        })
+        .catch((error) => {
+          console.error('Error submitting order:', error);
+        });
+    } else {
+      console.error('Form has validation errors');
+    }
+  });
+};
 
 
 
@@ -98,12 +144,12 @@ export default function Form() {
            type="text"
            id="fullName"
            name="fullName"
-           value=''
-           onChange={handleChange}
+           vvalue={form.fullName}
+           onChange={handleFullNameChange}
            placeholder="Type full name"
           />
           
-          {validationErrors.fullName && <div className="error-message">{validationError.fullName}</div>}
+          {errors.fullName && <div className="error-message">{errors.fullName}</div>}
         </div>
       </div>
 
@@ -114,12 +160,12 @@ export default function Form() {
             id="size"
             name="size"
             value={form.size}
-            onChange={handleChange}
+            onChange={handleSizeChange}
           >
             <option value="">----Choose Size----</option>
-            <option value="S">Small</option>
-            <option value="M">Medium</option>
-            <option value="L">Large</option>
+            <option value="Small">Small</option>
+            <option value="Medium">Medium</option>
+            <option value="Large">Large</option>
           </select>
           {errors.size && <div className="error-message">{errors.size}</div>}
         </div>
@@ -128,21 +174,22 @@ export default function Form() {
       <div className="input-group">
       
         {toppings.map((topping) => (
+         
           <label key={topping.topping_id} htmlFor={topping.topping_id}>
             <input
               type="checkbox"
               name="toppings"
-              value={topping.topping_id}
-              checked={form.toppings[topping.topping_id] === true}
-              onChange={handleChange}
+              onChange={handleToppingsChange}
+              
+
             />
-            {topping.text}<br />
+          
           </label>
         ))}
            
       </div>
 
-      <input type="submit" />
+      <input disabled={disabled} type="submit" />
     </form>
   )
 }
